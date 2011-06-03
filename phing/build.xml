@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="deployment" default="deploy" basedir=".">
+	
+	<target name="setenv">
+		<property name="settings.directory" value="." /> 
+		
+		<property name="settings.scm.type" value="subversion" /> 
+		<property name="settings.scm.username" value="zikmund" /> 
+		<property name="settings.scm.password" value="fne8xob2" />
+		<property name="settings.scm.url" value="projekty.tajfun.cz/svn/framework/projects/boulevard" />
+		<property name="settings.scm.protocol" value="https" />
+		<property name="settings.scm.branch" value="trunk" />
+		<property name="settings.scm.binary" value="svn" />
+		
+		<property name="settings.scm.type" value="git" /> 
+		<property name="settings.scm.username" value="stepiiik" /> 
+		<property name="settings.scm.password" value="japan32" />
+		<property name="settings.scm.url" value="github.com/stepiiik/jeanycz.git" />
+		<property name="settings.scm.protocol" value="https" />
+		<property name="settings.scm.branch" value="master" />
+		<property name="settings.scm.binary" value="git" />
+		
+		<property name="settings.db.deltas" value="db/deltas" />
+		<property name="settings.db.binary" value="mysql" />
+		<property name="settings.db.type" value="msyql" />
+		<property name="settings.db.host" value="localhost" />
+		<property name="settings.db.name" value="test_deploy" />
+		<property name="settings.db.user" value="root" />
+		<property name="settings.db.password" value="" />
+		<property name="settings.db.socket" value="/usr/local/zend/mysql/tmp/mysql.sock" />
+		
+		<property name="dirs.public" value="${settings.directory}/current" /> 
+	</target>
+
+	<target name="deploy" depends="setenv">
+		<echo msg="${settings.scm.type}" />
+		
+		<tstamp>
+			<format property="build.code" pattern="%Y%m%d_%H%M%S"/>
+		</tstamp>
+		
+		<property name="dirs.install" value="${settings.directory}/releases/${build.code}" /> 
+		<property name="dirs.shared" value="${settings.directory}/shared" /> 
+		
+		<echo msg="Vytvářím adresář ${dirs.install}" />
+		
+		<mkdir dir="${dirs.install}" />
+		
+		<if>
+		 <equals arg1="${settings.scm.type}" arg2="subversion" />
+		 <then>
+			
+			<svnexport
+			   svnpath="${settings.scm.binary}"
+			   username="${settings.scm.username}"
+			   password="${settings.scm.password}"
+			   force="true"
+			   nocache="true"
+			   repositoryurl="${settings.scm.protocol}://${settings.scm.url}/${settings.scm.branch}"
+			   todir="${dirs.install}"/>
+			
+		 </then>
+		</if>
+		
+		<if>
+		 <equals arg1="${settings.scm.type}" arg2="git" />
+		 <then>
+			<resolvepath propertyName="repo.dir.resolved" file="${dirs.install}" />		
+			<exec command="${settings.scm.binary} clone ${settings.scm.protocol}://${settings.scm.username}:${settings.scm.password}@${settings.scm.url} ${repo.dir.resolved}" />
+			<exec command="${settings.scm.binary} checkout ${settings.scm.branch} ${repo.dir.resolved}" />
+		 </then>
+		</if>
+				
+		<property name="shared" value="var" />
+		<foreach list="${shared}" param="folder" target="symlinkShared" />
+		
+		<property name="foldersToClear" value="var/cache" />
+		<foreach list="${foldersToClear}" param="folder" target="clearCache" />
+		
+		<property name="minifyJavascript" value="" />
+		<foreach list="${minifyJavascript}" param="folder" target="minifyJavascript" />
+		
+		<delete file="${dirs.public}" />
+		<symlink target="${dirs.install}" link="${dirs.public}" />
+		
+		<phingcall target="migrateDb" />
+	</target>
+	
+	<target name="symlinkShared">
+		<echo msg="Vytvářím symlink adresáře ${dirs.shared}/${folder} do ${dirs.install}/${folder}" />
+		
+		<resolvepath propertyName="sharedFolder" file="${dirs.shared}/${folder}"/>
+		<symlink target="${sharedFolder}" link="${dirs.install}/${folder}" />
+	</target>
+	
+	<target name="clearCache">
+		<echo msg="Mažu obsah složky ${dirs.install}/${folder}" />
+		
+		<delete dir="${dirs.install}/${folder}" includeemptydirs="true" verbose="true" />
+		<mkdir dir="${dirs.install}/${folder}" />
+	</target>
+	
+	<target name="minifyJavascript">
+		<echo msg="Minifikuji javascriptové soubory v ${dirs.install}/${folder}" />
+		
+		<jsMin targetDir="${dirs.install}/${folder}/minified" failOnError="false">
+		  <fileset dir="${dirs.install}/${folder}">
+		    <include name="**/*.js"/>
+		  </fileset>
+		</jsMin>
+	</target>
+	
+	<target name="migrateDb" depends="setenv">
+		<dbdeploy
+		  url="mysql:host=${settings.db.host};dbname=${settings.db.name};unix_socket=${settings.db.socket}"
+		  userid="${settings.db.user}"
+		  password="${settings.db.password}"
+		  dir="${dirs.public}/${settings.db.deltas}"
+		  outputfile="${dirs.public}/${settings.db.deltas}/all-deltas.sql"    
+		  undooutputfile="${dirs.public}/${settings.db.deltas}/undo-all-deltas.sql"
+		/>
+	</target>
+	
+	<target name="upgradeDb" depends="migrateDb">
+		
+		<exec command="${settings.db.binary} -h ${settings.db.host} -u ${settings.db.user} ${settings.db.name} &lt; ${dirs.public}/${settings.db.deltas}/all-deltas.sql" checkreturn="true" />    
+		
+	</target>
+	
+	<target name="downgradeDb" depends="setenv">
+		
+		<exec command="${settings.db.binary} -h ${settings.db.host} -u ${settings.db.user} ${settings.db.name} &lt; ${dirs.public}/${settings.db.deltas}/undo-all-deltas.sql" checkreturn="true" />    
+		
+	</target>
+
+</project>
