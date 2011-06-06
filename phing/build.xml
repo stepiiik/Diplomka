@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="deployment" default="deploy" basedir=".">
+	<taskdef name="ls" classname="tasks.Ls" />
+	<taskdef name="initDir" classname="tasks.InitDir" />
 	
 	<target name="setenv">
-		<property name="settings.directory" value="." /> 
+		<property name="settings.directory" value="/Users/stepan/Desktop/phing-test" /> 
 		
 		<property name="settings.scm.type" value="subversion" /> 
 		<property name="settings.scm.username" value="zikmund" /> 
@@ -30,6 +32,7 @@
 		<property name="settings.db.socket" value="/usr/local/zend/mysql/tmp/mysql.sock" />
 		
 		<property name="dirs.public" value="${settings.directory}/current" /> 
+		<property name="settings.dirs.releases" value="${settings.directory}/releases" /> 
 	</target>
 
 	<target name="deploy" depends="setenv">
@@ -39,8 +42,10 @@
 			<format property="build.code" pattern="%Y%m%d_%H%M%S"/>
 		</tstamp>
 		
-		<property name="dirs.install" value="${settings.directory}/releases/${build.code}" /> 
-		<property name="dirs.shared" value="${settings.directory}/shared" /> 
+		<property name="dirs.install" value="${settings.dirs.releases}/${build.code}" /> 
+		<property name="dirs.shared" value="${settings.directory}/shared" />
+		
+		<initDir dir="${settings.dirs.releases}" />
 		
 		<echo msg="Vytvářím adresář ${dirs.install}" />
 		
@@ -83,7 +88,9 @@
 		<delete file="${dirs.public}" />
 		<symlink target="${dirs.install}" link="${dirs.public}" />
 		
+		<!--
 		<phingcall target="migrateDb" />
+		-->
 	</target>
 	
 	<target name="symlinkShared">
@@ -132,5 +139,14 @@
 		<exec command="${settings.db.binary} -h ${settings.db.host} -u ${settings.db.user} ${settings.db.name} &lt; ${dirs.public}/${settings.db.deltas}/undo-all-deltas.sql" checkreturn="true" />    
 		
 	</target>
+	
+	<target name="releases" depends="setenv">
+		
+		<ls dir="${settings.dirs.releases}" />
+		
+	</target>
 
+	<target name="rollback" depends="setenv">
+		
+	</target>
 </project>
