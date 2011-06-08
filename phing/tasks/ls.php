@@ -28,17 +28,19 @@ class Ls extends Task {
      */
     public function main() {
         $releases = array();
+        
         if ($handle = opendir($this->dir)) {
             while (false !== ($file = readdir($handle))) {
                 if ($file != "." && $file != ".." && is_dir($this->dir . '/' . $file)) {
                     $releases[] = $file;
+
                 }
             }
             closedir($handle);
         }
         
-        foreach ($releases as $release) {
-            echo $release . "\n";
+        foreach ($releases as $i => $release) {
+            echo '[' . $i . '] ' . $release . "\n";
         }
     }
 }
