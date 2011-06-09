@@ -2,6 +2,7 @@
 <project name="deployment" default="deploy" basedir=".">
 	<taskdef name="ls" classname="tasks.Ls" />
 	<taskdef name="initDir" classname="tasks.InitDir" />
+	<taskdef name="compressor" classname="tasks.KpMinTask" />
 	
 	<target name="setenv">
 		<property file="./deploy.ini" /> 
@@ -25,6 +26,7 @@
 		
 		<property name="dirs.install" value="${settings.dirs.releases}/${build.code}" /> 
 		<property name="dirs.shared" value="${settings.directory}/shared" />
+		<property name="dirs.repository" value="${settings.directory}/repository" />
 		
 		<initDir dir="${settings.dirs.releases}" />
 		
@@ -32,21 +34,37 @@
 		
 		<mkdir dir="${dirs.install}" />
 		
-		<phingcall target="tag" />
+		<!-- <phingcall target="tag" />-->
+		
+		<available file="${dirs.repository}" property="repository_exists" value="true"/>
 		
 		<if>
 		 <equals arg1="${settings.scm.type}" arg2="subversion" />
 		 <then>
+			<if>
+				<equals arg1="${repository_exists}" arg2="1" />
+				<then>
+					<svnupdate
+					   svnpath="${settings.scm.binary}"
+					   username="${settings.scm.username}"
+					   password="${settings.scm.password}"
+					   nocache="true"
+					   todir="${dirs.repository}"/>
+				</then>
+				<else>
+					<mkdir dir="${dirs.repository}" />
+					<svncheckout
+					   svnpath="${settings.scm.binary}"
+					   username="${settings.scm.username}"
+					   password="${settings.scm.password}"
+					   force="true"
+					   nocache="true"
+					   repositoryurl="${settings.scm.protocol}://${settings.scm.url}/${settings.scm.branch}"
+					   todir="${dirs.repository}"/>
+				</else>
+			</if>
 			
-			<svnexport
-			   svnpath="${settings.scm.binary}"
-			   username="${settings.scm.username}"
-			   password="${settings.scm.password}"
-			   force="true"
-			   nocache="true"
-			   repositoryurl="${settings.scm.protocol}://${settings.scm.url}/${settings.scm.branch}"
-			   todir="${dirs.install}"/>
-			
+			<exec command="cp -r ${dirs.repository}/ ${dirs.install}" />
 		 </then>
 		</if>
 		
@@ -65,8 +83,7 @@
 		<property name="foldersToClear" value="var/cache" />
 		<foreach list="${foldersToClear}" param="folder" target="clearCache" />
 		
-		<property name="minifyJavascript" value="" />
-		<foreach list="${minifyJavascript}" param="folder" target="minifyJavascript" />
+		<foreach list="${settings.minify.js}" param="folder" target="minifyJavascript" />
 		
 		<delete file="${dirs.public}" />
 		<symlink target="${dirs.install}" link="${dirs.public}" />
@@ -93,11 +110,12 @@
 	<target name="minifyJavascript">
 		<echo msg="Minifikuji javascriptové soubory v ${dirs.install}/${folder}" />
 		
-		<jsMin targetDir="${dirs.install}/${folder}/minified" failOnError="false">
-		  <fileset dir="${dirs.install}/${folder}">
-		    <include name="**/*.js"/>
-		  </fileset>
-		</jsMin>
+		<compressor targetDir="${dirs.install}/${folder}"
+		              yuiPath="${settings.tools.yuicompressor}">
+        			<fileset dir="${dirs.install}/${folder}">
+        		<include name="*.js"/>
+			</fileset>
+		</compressor>
 	</target>
 	
 	<target name="migrateDb" depends="setenv">
@@ -139,8 +157,9 @@
 				 <equals arg1="${settings.scm.type}" arg2="git" />
 				 <then>
 					<resolvepath propertyName="repo.dir.resolved" file="${dirs.install}" />		
-					<exec command="${settings.scm.binary} clone ${settings.scm.protocol}://${settings.scm.username}:${settings.scm.password}@${settings.scm.url} ${repo.dir.resolved}" />
-					<exec command="${settings.scm.binary} checkout ${settings.scm.branch} ${repo.dir.resolved}" />
+					
+					<gittag repository="${repo.dir.resolved}"
+					        name="ver2.0" delete="true" />
 				 </then>
 				</if>
 			</then>
