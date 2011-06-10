@@ -4,6 +4,7 @@
 	<taskdef name="initDir" classname="tasks.InitDir" />
 	<taskdef name="compressor" classname="tasks.KpMinTask" />
 	<taskdef name="preprocessConfig" classname="tasks.PreprocessConfig" />
+	<taskdef name="rollback" classname="tasks.Rollback" />
 	
 	<target name="setenv">
 		<property file="./deploy.ini" /> 
@@ -15,7 +16,7 @@
 			</then>
 		</if>
 		
-		<echo msg="${host.name}" />
+		<property name="pdo.connectionString" value="mysql:host=${settings.db.host};dbname=${settings.db.name};unix_socket=${settings.db.socket}" />
 	</target>
 
 	<target name="deploy" depends="setenv">
@@ -122,7 +123,7 @@
 	
 	<target name="migrateDb" depends="setenv">
 		<dbdeploy
-		  url="mysql:host=${settings.db.host};dbname=${settings.db.name};unix_socket=${settings.db.socket}"
+		  url="${pdo.connectionString}"
 		  userid="${settings.db.user}"
 		  password="${settings.db.password}"
 		  dir="${dirs.public}/${settings.db.deltas}"
@@ -133,7 +134,9 @@
 	
 	<target name="upgradeDb" depends="migrateDb">
 		
-		<exec command="${settings.db.binary} -h ${settings.db.host} -u ${settings.db.user} ${settings.db.name} &lt; ${dirs.public}/${settings.db.deltas}/all-deltas.sql" checkreturn="true" />    
+		<pdosqlexec url="${pdo.connectionString}" userid="${settings.db.user}" password="${settings.db.password}">
+			<transaction src="${dirs.public}/${settings.db.deltas}/all-deltas.sql"/>
+		</pdosqlexec>  
 		
 	</target>
 	
@@ -170,7 +173,9 @@
 	
 	<target name="downgradeDb" depends="setenv">
 		
-		<exec command="${settings.db.binary} -h ${settings.db.host} -u ${settings.db.user} ${settings.db.name} &lt; ${dirs.public}/${settings.db.deltas}/undo-all-deltas.sql" checkreturn="true" />    
+		<pdosqlexec url="${pdo.connectionString}" userid="${settings.db.user}" password="${settings.db.password}">
+			<transaction src="${dirs.public}/${settings.db.deltas}/undo-all-deltas.sql"/>
+		</pdosqlexec>  
 		
 	</target>
 	
@@ -181,7 +186,22 @@
 	</target>
 
 	<target name="rollback" depends="setenv">
+		<phingcall target="releases" />
+		<propertyprompt propertyName="releaseNumber" defaultValue="-1"
+				promptText="Zadejte číslo verze" />
 		
+		<resolvepath propertyName="dirs.public.resolved" file="${dirs.public}" />		
+		<resolvepath propertyName="dirs.releases.resolved" file="${settings.dirs.releases}" />	
+		
+		<rollback 
+			dir="${dirs.releases.resolved}" 
+			current="${dirs.public.resolved}" 
+			release="${releaseNumber}"
+			deltas="${settings.db.deltas}" />
+			
+		<pdosqlexec url="${pdo.connectionString}" userid="${settings.db.user}" password="${settings.db.password}">
+			<transaction src="${dirs.public}/${settings.db.deltas}/rollback-all-deltas.sql"/>
+		</pdosqlexec>
 	</target>
 	
 	<target name="secureConfig" depends="setenv">
