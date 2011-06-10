@@ -3,6 +3,7 @@
 	<taskdef name="ls" classname="tasks.Ls" />
 	<taskdef name="initDir" classname="tasks.InitDir" />
 	<taskdef name="compressor" classname="tasks.KpMinTask" />
+	<taskdef name="preprocessConfig" classname="tasks.PreprocessConfig" />
 	
 	<target name="setenv">
 		<property file="./deploy.ini" /> 
@@ -77,13 +78,13 @@
 		 </then>
 		</if>
 				
-		<property name="shared" value="var" />
-		<foreach list="${shared}" param="folder" target="symlinkShared" />
+		<foreach list="${settings.dirs.shared}" param="folder" target="symlinkShared" />
 		
-		<property name="foldersToClear" value="var/cache" />
-		<foreach list="${foldersToClear}" param="folder" target="clearCache" />
+		<foreach list="${settings.dirs.cache}" param="folder" target="clearCache" />
 		
 		<foreach list="${settings.minify.js}" param="folder" target="minifyJavascript" />
+		
+		<phingcall target="secureConfig" />
 		
 		<delete file="${dirs.public}" />
 		<symlink target="${dirs.install}" link="${dirs.public}" />
@@ -105,6 +106,7 @@
 		
 		<delete dir="${dirs.install}/${folder}" includeemptydirs="true" verbose="true" />
 		<mkdir dir="${dirs.install}/${folder}" />
+		<chmod file="${dirs.install}/${folder}" mode="0777" />
 	</target>
 	
 	<target name="minifyJavascript">
@@ -180,5 +182,14 @@
 
 	<target name="rollback" depends="setenv">
 		
+	</target>
+	
+	<target name="secureConfig" depends="setenv">
+		<resolvepath propertyName="config.secure.resolved" file="${settings.config.secure}" />		
+		<preprocessConfig config="${config.secure.resolved}">
+			<fileset dir="${dirs.install}" id="configFiles">
+				<include name="**/*.ini" />
+			</fileset>
+		</preprocessConfig>
 	</target>
 </project>
