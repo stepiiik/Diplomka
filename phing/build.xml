@@ -5,6 +5,16 @@
 	<taskdef name="compressor" classname="tasks.KpMinTask" />
 	<taskdef name="preprocessConfig" classname="tasks.PreprocessConfig" />
 	<taskdef name="rollback" classname="tasks.Rollback" />
+
+	<available file="./hooks/preFilesUpdate.xml" property="preFilesUpdateExists" value="true"/>
+	
+	<if>
+		<equals arg1="${preFilesUpdateExists}" arg2="1" />
+		<then>
+			<import file="./hooks/preFilesUpdate.xml" optional="true" />
+		</then>
+	</if>
+	
 	
 	<target name="setenv">
 		<property file="./deploy.ini" /> 
@@ -30,7 +40,7 @@
 		<property name="dirs.shared" value="${settings.directory}/shared" />
 		<property name="dirs.repository" value="${settings.directory}/repository" />
 		
-		<initDir dir="${settings.dirs.releases}" />
+		<mkdir dir="${settings.dirs.releases}" />
 		
 		<echo msg="Vytvářím adresář ${dirs.install}" />
 		
@@ -85,6 +95,10 @@
 		
 		<foreach list="${settings.minify.js}" param="folder" target="minifyJavascript" />
 		
+		<foreach list="${settings.minify.images}" param="folder" target="minifyImages" />
+		
+		<foreach list="${settings.libraries}" param="folder" target="importLibrary" />
+		
 		<phingcall target="secureConfig" />
 		
 		<delete file="${dirs.public}" />
@@ -119,6 +133,18 @@
         		<include name="*.js"/>
 			</fileset>
 		</compressor>
+	</target>
+	
+	<target name="minifyImages">
+		<echo msg="Minifikuji obrázky v ${dirs.install}/${folder}" />
+		
+		<exec command="${settings.tools.exifTool} ${settings.tools.exifToolParam}  ${dirs.install}/${folder}" />
+	</target>
+	
+	<target name="importLibrary">
+		
+		<getLibraryName dir="${settings.dirs.releases}" />
+		
 	</target>
 	
 	<target name="migrateDb" depends="setenv">
@@ -212,4 +238,16 @@
 			</fileset>
 		</preprocessConfig>
 	</target>
+	
+	<target name="test" depends="setenv">
+
+		<if>
+			<equals arg1="${preFilesUpdateExists}" arg2="1" />
+			<then>
+				<phingcall target="preFilesUpdate" />
+			</then>
+		</if>
+		
+	</target>
+	
 </project>
